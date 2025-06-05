@@ -1,6 +1,33 @@
 #!/bin/bash
 set -e
 
+# Check for required tools
+check_dependencies() {
+    local missing_deps=0
+    
+    # Check for cargo
+    if ! command -v cargo &> /dev/null; then
+        echo "❌ cargo is not installed. Please install Rust from https://rustup.rs/"
+        missing_deps=1
+    fi
+
+    # Check for rpmbuild if building RPM
+    if [ $BUILD_RPM -eq 1 ] && ! command -v rpmbuild &> /dev/null; then
+        echo "❌ rpmbuild is not installed. Please install rpm-build package"
+        missing_deps=1
+    fi
+
+    # Check for dpkg-deb if building DEB
+    if [ $BUILD_DEB -eq 1 ] && ! command -v dpkg-deb &> /dev/null; then
+        echo "❌ dpkg-deb is not installed. Please install dpkg package"
+        missing_deps=1
+    fi
+
+    if [ $missing_deps -eq 1 ]; then
+        exit 1
+    fi
+}
+
 # Default to build nothing unless specified
 BUILD_DEB=0
 BUILD_RPM=0
@@ -47,7 +74,52 @@ done
 
 # If --all is specified, build everything
 if [ $BUILD_ALL -eq 1 ]; then
-  BUILD_DEB=1
+    BUILD_DEB=1
+    BUILD_RPM=1
+    BUILD_TARBALL=1
+fi
+
+# Check dependencies
+check_dependencies
+
+# Get version from Cargo.toml
+VERSION=$(grep '^version' Cargo.toml | head -n1 | cut -d '"' -f2)
+echo "📦 Building git-switch version $VERSION"
+
+# Build release version
+echo "🔨 Building release version..."
+cargo build --release
+
+# Create necessary directories
+mkdir -p target/debian
+mkdir -p target/rpm
+mkdir -p target/tarball
+
+# Build Debian package if requested
+if [ $BUILD_DEB -eq 1 ]; then
+    echo "📦 Building Debian package..."
+    cargo deb
+    mv target/debian/git-switch_${VERSION}_amd64.deb target/debian/
+    echo "✅ Debian package built successfully"
+fi
+
+# Build RPM package if requested
+if [ $BUILD_RPM -eq 1 ]; then
+    echo "📦 Building RPM package..."
+    cargo rpm build
+    mv target/release/rpmbuild/RPMS/x86_64/git-switch-${VERSION}-1.x86_64.rpm target/rpm/
+    echo "✅ RPM package built successfully"
+fi
+
+# Build tarball if requested
+if [ $BUILD_TARBALL -eq 1 ]; then
+    echo "📦 Building tarball..."
+    tar -czf target/tarball/git-switch-${VERSION}.tar.gz -C target/release git_switch
+    echo "✅ Tarball built successfully"
+fi
+
+echo "✨ Build process completed!"
+
   BUILD_RPM=1
   BUILD_TARBALL=1
 fi
@@ -166,6 +238,33 @@ if [ $BUILD_TARBALL -eq 1 ]; then
   cat > target/tar/git-switch/install.sh << 'EOF'
 #!/bin/bash
 set -e
+
+# Check for required tools
+check_dependencies() {
+    local missing_deps=0
+    
+    # Check for cargo
+    if ! command -v cargo &> /dev/null; then
+        echo "❌ cargo is not installed. Please install Rust from https://rustup.rs/"
+        missing_deps=1
+    fi
+
+    # Check for rpmbuild if building RPM
+    if [ $BUILD_RPM -eq 1 ] && ! command -v rpmbuild &> /dev/null; then
+        echo "❌ rpmbuild is not installed. Please install rpm-build package"
+        missing_deps=1
+    fi
+
+    # Check for dpkg-deb if building DEB
+    if [ $BUILD_DEB -eq 1 ] && ! command -v dpkg-deb &> /dev/null; then
+        echo "❌ dpkg-deb is not installed. Please install dpkg package"
+        missing_deps=1
+    fi
+
+    if [ $missing_deps -eq 1 ]; then
+        exit 1
+    fi
+}
 
 # Copy binary to /usr/bin
 sudo cp usr/bin/git-switch /usr/bin/

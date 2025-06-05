@@ -8,6 +8,9 @@ mod ssh;
 mod git;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 fn main() {
     let matches = Command::new("git-switch")
         .version("1.0")

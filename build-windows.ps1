@@ -46,8 +46,38 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Create output directory
+# Create output directories
 $OutputDir = "target\windows-package\$AppName-$Version"
+$BinDir = "$OutputDir\bin"
+$DocsDir = "$OutputDir\docs"
+
+New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+New-Item -ItemType Directory -Force -Path $DocsDir | Out-Null
+
+# Copy files to package directory
+Write-Host "Copying files to package directory..." -ForegroundColor Cyan
+Copy-Item "target\release\git_switch.exe" -Destination "$BinDir\git-switch.exe"
+Copy-Item "README.md" -Destination "$DocsDir"
+Copy-Item "LICENSE" -Destination "$DocsDir"
+
+# Create version info file
+$VersionInfo = @"
+Git Switch v$Version
+
+Installation Instructions:
+1. Copy git-switch.exe to a directory in your PATH
+2. Run 'git-switch --help' to see available commands
+"@
+
+$VersionInfo | Out-File -FilePath "$DocsDir\version.txt" -Encoding UTF8
+
+# Create ZIP archive
+Write-Host "Creating ZIP archive..." -ForegroundColor Cyan
+$ZipFile = "target\windows-package\$AppName-$Version.zip"
+Compress-Archive -Path "$OutputDir\*" -DestinationPath $ZipFile -Force
+
+Write-Host "✨ Build completed successfully!" -ForegroundColor Green
+Write-Host "Package created at: $ZipFile" -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$OutputDir\bin" -Force | Out-Null
 
@@ -159,7 +189,7 @@ git-switch list
 
 ## Uninstallation
 
-To uninstall, right-click on `uninstall.bat` and select "Run as administrator".
+To uninstall, right-click on \u{2018}uninstall.bat\u{2019} and select \u{201C}Run as administrator\u{201D}.
 
 ## Manual Installation
 

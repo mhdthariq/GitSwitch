@@ -1,0 +1,77 @@
+name: Build Project
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build_linux:
+    name: Build on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Debian package
+        run: |
+          chmod +x build.sh
+          ./build.sh --deb
+
+      - name: Build RPM package
+        run: ./build.sh --rpm
+
+      - name: Build Tarball
+        run: ./build.sh --tarball
+
+      - name: Upload Debian Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: git-switch-deb
+          path: target/debian/*.deb
+
+      - name: Upload RPM Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: git-switch-rpm
+          path: target/rpm/*.rpm
+
+      - name: Upload Tarball Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: git-switch-tarball
+          path: target/tarball/*.tar.gz
+
+  build_windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Windows Package
+        shell: pwsh
+        run: .\build-windows.ps1
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: git-switch-windows
+          path: target/windows-package/**/*.zip
