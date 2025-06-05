@@ -1,7 +1,9 @@
-use crate::config::{load_accounts, save_account, delete_account, Account};
-use crate::ssh::{update_ssh_config, generate_ssh_key, add_ssh_key, display_public_key, remove_ssh_config_entry, delete_ssh_key_files};
+use crate::config::{Account, delete_account, load_accounts, save_account};
 use crate::git::update_git_remote;
-use crate::ssh::{update_ssh_config, generate_ssh_key, add_ssh_key, display_public_key};
+use crate::ssh::{
+    add_ssh_key, delete_ssh_key_files, display_public_key, generate_ssh_key,
+    remove_ssh_config_entry, update_ssh_config,
+};
 use crate::utils::run_command;
 use std::io::{self, Write};
 
@@ -40,14 +42,17 @@ pub fn add_account(name: &str, username: &str, email: &str) {
     println!("--------------------------------------------------");
     display_public_key(&ssh_key_path);
     println!("--------------------------------------------------");
-    println!("Copy this key and add it to your GitHub account at: https://github.com/settings/keys");
+    println!(
+        "Copy this key and add it to your GitHub account at: https://github.com/settings/keys"
+    );
 }
 
 pub fn use_account(name_or_username: &str) {
     let accounts = load_accounts();
 
     // Try to find account by name first, then by username
-    let account = accounts.iter()
+    let account = accounts
+        .iter()
         .find(|acc| acc.name == name_or_username || acc.username == name_or_username)
         .cloned();
 
@@ -63,7 +68,10 @@ pub fn use_account(name_or_username: &str) {
 
             // Add SSH key to agent
             if add_ssh_key(&acc.ssh_key) {
-                println!("✅ Switched to Git account: {} ({})", acc.name, acc.username);
+                println!(
+                    "✅ Switched to Git account: {} ({})",
+                    acc.name, acc.username
+                );
 
                 // Ask if user wants to update current repo's remote URL
                 print!("Do you want to update remote URL for the current repository? (y/n): ");
@@ -82,9 +90,12 @@ pub fn use_account(name_or_username: &str) {
             } else {
                 eprintln!("❌ Failed to add SSH key to agent.");
             }
-        },
+        }
         None => {
-            println!("❌ Account with name or username '{}' not found.", name_or_username);
+            println!(
+                "❌ Account with name or username '{}' not found.",
+                name_or_username
+            );
 
             // List available accounts to help the user
             if !accounts.is_empty() {
@@ -123,7 +134,10 @@ pub fn remove_account(name: &str) {
                 eprintln!("❌ Failed to delete SSH key files: {}", e);
             }
 
-            println!("✅ Account '{}' and its associated SSH configurations and keys have been removed.", name);
+            println!(
+                "✅ Account '{}' and its associated SSH configurations and keys have been removed.",
+                name
+            );
         }
         None => {
             println!("❌ Account with name '{}' not found.", name);

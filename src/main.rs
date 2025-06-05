@@ -1,11 +1,10 @@
+use crate::commands::{add_account, list_accounts, remove_account, use_account};
 use clap::{Arg, Command};
-use crate::commands::{add_account, list_accounts, use_account, remove_account};
-use crate::commands::{add_account, list_accounts, use_account};
 
 mod commands;
 mod config;
-mod ssh;
 mod git;
+mod ssh;
 mod utils;
 
 #[cfg(test)]
@@ -18,20 +17,32 @@ fn main() {
         .subcommand(
             Command::new("add")
                 .about("Add a new Git account")
-                .arg(Arg::new("name").required(true).help("Name for the account (e.g. 'Work', 'Personal')"))
+                .arg(
+                    Arg::new("name")
+                        .required(true)
+                        .help("Name for the account (e.g. 'Work', 'Personal')"),
+                )
                 .arg(Arg::new("username").required(true).help("Git username"))
                 .arg(Arg::new("email").required(true).help("Git email address")),
-            )
+        )
         .subcommand(
             Command::new("use")
                 .about("Switch to a saved Git account")
-                .arg(Arg::new("name").required(true).help("Name or username of the account to use")),
-            )
+                .arg(
+                    Arg::new("name")
+                        .required(true)
+                        .help("Name or username of the account to use"),
+                ),
+        )
         .subcommand(Command::new("list").about("List all saved Git accounts"))
         .subcommand(
             Command::new("remove")
                 .about("Remove a saved Git account and its SSH key")
-                .arg(Arg::new("name").required(true).help("Name of the account to remove")),
+                .arg(
+                    Arg::new("name")
+                        .required(true)
+                        .help("Name of the account to remove"),
+                ),
         )
         .get_matches();
 
@@ -52,9 +63,6 @@ fn main() {
         Some(("remove", sub_m)) => {
             let name = sub_m.get_one::<String>("name").unwrap();
             remove_account(name);
-        }
-        _ => {
-            list_accounts();
         }
         _ => {
             println!("Use 'git-switch --help' to see available commands.");

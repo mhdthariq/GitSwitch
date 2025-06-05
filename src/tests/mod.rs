@@ -1,10 +1,9 @@
+use crate::config::{Account, delete_account, get_config_path, load_accounts, save_account};
+use crate::utils::file_exists;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
-
-use crate::config::{Account, get_config_path, load_accounts, save_account, delete_account};
-use crate::utils::file_exists;
 
 /// Test helper to create a temporary directory for test files
 fn setup_test_dir() -> TempDir {
@@ -15,16 +14,17 @@ fn setup_test_dir() -> TempDir {
 fn create_mock_config(accounts: &[Account]) -> PathBuf {
     let temp_dir = setup_test_dir();
     let config_path = temp_dir.path().join(".git-switch-accounts");
-    
+
     let mut file = File::create(&config_path).expect("Failed to create mock config file");
     for account in accounts {
         let entry = format!(
             "{}|{}|{}|{}\n",
             account.name, account.username, account.email, account.ssh_key
         );
-        file.write_all(entry.as_bytes()).expect("Failed to write mock account");
+        file.write_all(entry.as_bytes())
+            .expect("Failed to write mock account");
     }
-    
+
     config_path
 }
 
@@ -48,8 +48,9 @@ mod tests {
         // Load accounts and verify
         let accounts = load_accounts();
         assert!(!accounts.is_empty(), "No accounts loaded");
-        
-        let loaded_account = accounts.iter()
+
+        let loaded_account = accounts
+            .iter()
             .find(|acc| acc.name == "test")
             .expect("Test account not found");
 
@@ -82,8 +83,15 @@ mod tests {
 
         // Verify account was deleted
         let remaining_accounts = load_accounts();
-        assert_eq!(remaining_accounts.len(), 1, "Wrong number of accounts after deletion");
-        assert_eq!(remaining_accounts[0].name, "test2", "Wrong account remained");
+        assert_eq!(
+            remaining_accounts.len(),
+            1,
+            "Wrong number of accounts after deletion"
+        );
+        assert_eq!(
+            remaining_accounts[0].name, "test2",
+            "Wrong account remained"
+        );
     }
 
     #[test]

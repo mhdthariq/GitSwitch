@@ -1,5 +1,5 @@
-use std::process::Command;
 use crate::utils::run_command;
+use std::process::Command;
 
 pub fn update_git_remote(username: &str, repo_url: &str) {
     let repo_name = if repo_url.contains('/') {

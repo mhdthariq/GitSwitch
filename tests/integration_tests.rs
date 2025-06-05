@@ -7,14 +7,14 @@ use tempfile::TempDir;
 /// Helper function to set up a test environment
 fn setup_test_environment() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    
+
     // Create .ssh directory
     let ssh_dir = temp_dir.path().join(".ssh");
     fs::create_dir_all(&ssh_dir).expect("Failed to create .ssh directory");
-    
+
     // Create empty SSH config
     File::create(ssh_dir.join("config")).expect("Failed to create SSH config");
-    
+
     temp_dir
 }
 
@@ -33,10 +33,7 @@ fn test_full_account_lifecycle() {
     let temp_dir = setup_test_environment();
 
     // Test adding an account
-    let add_output = run_git_switch(
-        &["add", "work", "workuser", "work@example.com"],
-        &temp_dir
-    );
+    let add_output = run_git_switch(&["add", "work", "workuser", "work@example.com"], &temp_dir);
     assert!(add_output.status.success());
     let output_str = String::from_utf8_lossy(&add_output.stdout);
     assert!(output_str.contains("Account 'work' added successfully"));
@@ -58,7 +55,9 @@ fn test_full_account_lifecycle() {
     let remove_output = run_git_switch(&["remove", "work"], &temp_dir);
     assert!(remove_output.status.success());
     let remove_str = String::from_utf8_lossy(&remove_output.stdout);
-    assert!(remove_str.contains("Account 'work' and its associated SSH configurations and keys have been removed"));
+    assert!(remove_str.contains(
+        "Account 'work' and its associated SSH configurations and keys have been removed"
+    ));
 
     // Verify account was removed
     let final_list = run_git_switch(&["list"], &temp_dir);
@@ -88,14 +87,11 @@ fn test_multiple_accounts() {
     // Add first account
     run_git_switch(
         &["add", "personal", "personaluser", "personal@example.com"],
-        &temp_dir
+        &temp_dir,
     );
 
     // Add second account
-    run_git_switch(
-        &["add", "work", "workuser", "work@example.com"],
-        &temp_dir
-    );
+    run_git_switch(&["add", "work", "workuser", "work@example.com"], &temp_dir);
 
     // List accounts and verify both exist
     let list_output = run_git_switch(&["list"], &temp_dir);
@@ -105,7 +101,9 @@ fn test_multiple_accounts() {
 
     // Switch between accounts
     let use_personal = run_git_switch(&["use", "personal"], &temp_dir);
-    assert!(String::from_utf8_lossy(&use_personal.stdout).contains("Switched to Git account: personal"));
+    assert!(
+        String::from_utf8_lossy(&use_personal.stdout).contains("Switched to Git account: personal")
+    );
 
     let use_work = run_git_switch(&["use", "work"], &temp_dir);
     assert!(String::from_utf8_lossy(&use_work.stdout).contains("Switched to Git account: work"));
