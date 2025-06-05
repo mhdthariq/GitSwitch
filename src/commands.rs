@@ -9,7 +9,7 @@ use std::io::{self, Write};
 
 pub fn add_account(name: &str, username: &str, email: &str) {
     // Generate SSH key path based on account name
-    let ssh_key_path = format!("~/.ssh/id_rsa_{}", name.replace(" ", "_").to_lowercase());
+    let ssh_key_path = format!("~/.ssh/id_rsa_{}", name.replace(' ', "_").to_lowercase());
 
     // Create parent directory if it doesn't exist
     let expanded_key_path = shellexpand::tilde(&ssh_key_path).to_string();
@@ -63,8 +63,37 @@ pub fn use_account(name_or_username: &str) {
             run_command("git", &["config", "--global", "user.email", &acc.email]);
 
             // Start ssh-agent if not already running
+            // Note: ssh-agent -s might output shell commands to be eval'd.
+            // For a robust solution, consider parsing its output or using a library.
+            // For now, we assume it sets up the agent if not running.
             println!("🔄 Ensuring SSH agent is running...");
-            run_command("ssh-agent", &["-s"]);
+            if !cfg!(windows) {
+                // `ssh-agent -s` is typical for Unix-like systems
+                let output = std::process::Command::new("ssh-agent").arg("-s").output();
+                if let Ok(out) = output {
+                    if !out.status.success() {
+                        eprintln!(
+                            "⚠️ Failed to start ssh-agent. SSH key might not be added automatically."
+                        );
+                        eprintln!("Error: {}", String::from_utf8_lossy(&out.stderr));
+                    } else {
+                        // On Unix, `ssh-agent -s` prints shell commands to set env vars.
+                        // For this tool to affect the parent shell, the user would typically run:
+                        // eval $(git-switch use <account>)
+                        // or source the output. Directly running `ssh-agent -s` in a subprocess
+                        // doesn't set environment variables for the parent shell of git-switch.
+                        // This is a common challenge for tools managing ssh-agent.
+                        // For simplicity, we'll proceed, but ssh-add might fail if agent isn't truly ready.
+                        println!(
+                            "ℹ️ ssh-agent command executed. You might need to run `eval $(ssh-agent -s)` in your shell if keys are not added."
+                        );
+                    }
+                } else {
+                    eprintln!(
+                        "⚠️ Failed to execute ssh-agent. SSH key might not be added automatically."
+                    );
+                }
+            }
 
             // Add SSH key to agent
             if add_ssh_key(&acc.ssh_key) {
@@ -80,15 +109,17 @@ pub fn use_account(name_or_username: &str) {
                 io::stdin().read_line(&mut response).unwrap();
 
                 if response.trim().to_lowercase() == "y" {
-                    print!("Enter repository name (e.g., 'username/repo'): ");
+                    print!("Enter repository name (e.g., 'username/repo' or just 'repo'): ");
                     io::stdout().flush().unwrap();
                     let mut repo = String::new();
                     io::stdin().read_line(&mut repo).unwrap();
-
-                    update_git_remote(&acc.username, &repo.trim());
+                    // Clippy fix: needless_borrow
+                    update_git_remote(&acc.username, repo.trim());
                 }
             } else {
-                eprintln!("❌ Failed to add SSH key to agent.");
+                eprintln!(
+                    "❌ Failed to add SSH key to agent. Ensure ssh-agent is running and configured."
+                );
             }
         }
         None => {

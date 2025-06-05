@@ -12,7 +12,7 @@ pub fn get_ssh_config_path() -> String {
 }
 
 pub fn generate_ssh_key(identity_file: &str) {
-    let expanded_path = if identity_file.starts_with('~') {
+    let expanded_path_str = if identity_file.starts_with('~') {
         let home = dirs::home_dir().expect("Could not determine home directory");
         home.join(&identity_file[2..])
             .to_string_lossy()
@@ -20,14 +20,15 @@ pub fn generate_ssh_key(identity_file: &str) {
     } else {
         identity_file.to_string()
     };
+    let expanded_path = Path::new(&expanded_path_str);
 
-    if file_exists(&expanded_path) {
+    if expanded_path.exists() {
         println!("✅ SSH key already exists: {}", identity_file);
         return;
     }
 
     // Ensure the directory exists
-    if let Some(parent) = Path::new(&expanded_path).parent() {
+    if let Some(parent) = expanded_path.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent).expect("Failed to create SSH directory");
         }
@@ -36,7 +37,16 @@ pub fn generate_ssh_key(identity_file: &str) {
     println!("🔑 Generating SSH key: {}", identity_file);
     run_command(
         "ssh-keygen",
-        &["-t", "rsa", "-b", "4096", "-f", &expanded_path, "-N", ""],
+        &[
+            "-t",
+            "rsa",
+            "-b",
+            "4096",
+            "-f",
+            expanded_path.to_str().unwrap(),
+            "-N",
+            "",
+        ],
     );
 }
 
@@ -66,15 +76,14 @@ pub fn display_public_key(identity_file: &str) {
 }
 
 pub fn update_ssh_config(name: &str, identity_file: &str) -> io::Result<()> {
+    let host_alias_name = name.replace(' ', "_").to_lowercase(); // Consistent host alias
     let config_entry = format!(
         "\n# {} GitHub Account\nHost github-{}\n    HostName github.com\n    User git\n    IdentityFile {}\n",
-        name,
-        name.replace(' ', "_").to_lowercase(), // Ensure name is valid for Host alias
-        identity_file
+        name, host_alias_name, identity_file
     );
 
-    let expanded_path = get_ssh_config_path();
-    let path = Path::new(&expanded_path);
+    let expanded_path_str = get_ssh_config_path();
+    let path = Path::new(&expanded_path_str);
 
     // Create directory if it doesn't exist
     if let Some(parent) = path.parent() {
@@ -106,16 +115,17 @@ pub fn remove_ssh_config_entry(name: &str) -> io::Result<()> {
     let mut new_content = String::new();
     let mut lines = file_content.lines().peekable();
     let entry_header_check = format!("# {} GitHub Account", name);
+    // Ensure host_check matches the format used in update_ssh_config
     let host_check = format!("Host github-{}", name.replace(' ', "_").to_lowercase());
 
     let mut skip_block = false;
 
     while let Some(line) = lines.next() {
         if line.trim() == entry_header_check {
-            // Check if the next line is the Host entry for this account
+            // Clippy fix: unnecessary_map_or
             if lines
                 .peek()
-                .map_or(false, |next_line| next_line.trim().starts_with(&host_check))
+                .is_some_and(|next_line| next_line.trim().starts_with(&host_check))
             {
                 skip_block = true;
                 // Skip the header line and the next 3 lines of the config block
@@ -130,16 +140,20 @@ pub fn remove_ssh_config_entry(name: &str) -> io::Result<()> {
             new_content.push_str(line);
             new_content.push('\n');
         } else {
-            // If we were skipping, and the current line is not empty, it means the block ended.
-            // However, our logic above already consumes the block.
-            // If the line is empty or a new block starts, reset skip_block.
-            if line.trim().is_empty() || line.trim().starts_with('#') {
+            // If we were skipping, and the current line is not empty or not a comment,
+            // it means the block ended.
+            if !line.trim().is_empty() && !line.trim().starts_with('#') {
                 skip_block = false;
-                // If it's a new block's header or an empty line that we didn't mean to skip
+                new_content.push_str(line);
+                new_content.push('\n');
+            } else if line.trim().is_empty() || line.trim().starts_with('#') {
+                // If it's an empty line or a new comment (potentially a new block's header)
+                skip_block = false;
+                // Clippy fix: unnecessary_map_or
                 if !(line.trim() == entry_header_check
                     && lines
                         .peek()
-                        .map_or(false, |next_line| next_line.trim().starts_with(&host_check)))
+                        .is_some_and(|next_line| next_line.trim().starts_with(&host_check)))
                 {
                     new_content.push_str(line);
                     new_content.push('\n');
@@ -149,12 +163,21 @@ pub fn remove_ssh_config_entry(name: &str) -> io::Result<()> {
     }
 
     // Clean up excessive newlines at the end
-    while new_content.ends_with("\n\n") {
+    while new_content.ends_with("\n\n\n") {
+        // Handles cases with multiple blank lines from deleted blocks
         new_content.pop();
     }
-    // If the entire content was just one block and it was removed, new_content might be empty or just "\n"
-    if new_content == "\n" {
+    if new_content.ends_with("\n\n") && new_content.trim().is_empty() {
+        // If only two newlines left and content is otherwise empty
         new_content.clear();
+    } else if new_content.ends_with("\n\n") {
+        new_content.pop(); // Reduce to a single trailing newline if content exists
+    }
+
+    if new_content == "\n" && file_content.lines().count() > 1 { // Avoid clearing if it was a single line file to begin with
+        // Only clear if it was meant to be empty after removal
+    } else if new_content.trim().is_empty() && !file_content.trim().is_empty() {
+        new_content.clear(); // If all content was removed, make it fully empty
     }
 
     let mut file = OpenOptions::new().write(true).truncate(true).open(path)?;
@@ -164,11 +187,11 @@ pub fn remove_ssh_config_entry(name: &str) -> io::Result<()> {
 }
 
 pub fn delete_ssh_key_files(identity_file_base: &str) -> io::Result<()> {
-    let base_path = shellexpand::tilde(identity_file_base).to_string();
-    let private_key_path = Path::new(&base_path);
+    let base_path_str = shellexpand::tilde(identity_file_base).to_string();
+    let private_key_path = Path::new(&base_path_str);
 
     // Bind the formatted string to a variable with a longer lifetime
-    let public_key_path_str = format!("{}.pub", base_path);
+    let public_key_path_str = format!("{}.pub", base_path_str);
     let public_key_path = Path::new(&public_key_path_str);
 
     if private_key_path.exists() {
@@ -198,19 +221,28 @@ pub fn add_ssh_key(key_path: &str) -> bool {
         return false;
     }
 
-    // Handle Windows differently if needed
-    if cfg!(windows) {
-        println!(
-            "🔑 Adding SSH key to agent (Windows): {}",
-            expanded_path.display()
+    println!("🔑 Adding SSH key to agent: {}", expanded_path.display());
+    // On Windows, ssh-add might require the agent to be running.
+    // `start-ssh-agent.cmd` is often used, or it's part of Git for Windows.
+    // For cross-platform simplicity, directly calling ssh-add.
+    // Users on Windows might need to ensure their agent is active.
+    let status = run_command(
+        "ssh-add",
+        &[expanded_path.to_str().expect("Invalid path for SSH key")],
+    );
+    if !status {
+        eprintln!(
+            "❌ Failed to add SSH key. Ensure ssh-agent is running and the key is not password protected or password was entered if prompted."
         );
-        // For Windows, ssh-agent might be handled by Pageant or Windows OpenSSH Agent.
-        // A simple `ssh-add` might work if OpenSSH agent is running and configured.
-        // This example assumes `ssh-add` is available and works.
-        // More robust Windows support might require checking agent status or using specific APIs.
-        run_command("ssh-add", &[expanded_path.to_str().unwrap()])
-    } else {
-        println!("🔑 Adding SSH key to agent: {}", expanded_path.display());
-        run_command("ssh-add", &[expanded_path.to_str().unwrap()])
+        if cfg!(windows) {
+            eprintln!(
+                "Hint: On Windows, you might need to run `start-ssh-agent` or ensure the OpenSSH Authentication Agent service is running."
+            );
+        } else {
+            eprintln!(
+                "Hint: On Unix-like systems, try `eval $(ssh-agent -s)` then `ssh-add your_key_path` manually to debug."
+            );
+        }
     }
+    status
 }
