@@ -1,4 +1,4 @@
-use crate::utils::{file_exists, run_command};
+use crate::utils::run_command;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::Path;
